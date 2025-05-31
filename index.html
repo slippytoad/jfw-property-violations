@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JFW Oakland Violations Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #1f2937;
+            padding: 2rem;
+            border-radius: 1.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            position: relative;
+            color: white;
+            border: 1px solid #4b5563;
+        }
+        .modal-close-button {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #d1d5db;
+            cursor: pointer;
+        }
+    </style>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-gray-900 text-white">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const SUPABASE_URL = 'https://qdjfzjqhnhrlkpqdtssp.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkamZ6anFobmhybGtwcWR0c3NwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE3NTcyMDUsImV4cCI6MjA1NzMzMzIwNX0.KSREpeFWe08W1bdY1GPxUEol9_Gd3PRqT37HIXl4_r4'
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const App = () => {
+            const [groupedViolations, setGroupedViolations] = React.useState({});
+            const [loading, setLoading] = React.useState(true);
+            const [error, setError] = React.useState(null);
+            const [showOpenViolations, setShowOpenViolations] = React.useState(true);
+            const [syncStatus, setSyncStatus] = React.useState('');
+            const [lastApiCheckTime, setLastApiCheckTime] = React.useState(null);
+            const [nextApiCheckTime, setNextApiCheckTime] = React.useState(null);
+            const [apiCheckTimeError, setApiCheckTimeError] = React.useState(null);
+            const [newViolationsCountDisplay, setNewViolationsCountDisplay] = React.useState(null);
+
+            const [showLLMModal, setShowLLMModal] = React.useState(false);
+            const [llmModalContent, setLlmModalContent] = React.useState('');
+            const [llmModalLoading, setLlmModalLoading] = React.useState(false);
+            const [llmModalError, setLlmModalError] = React.useState(null);
+
+            const wprdcApiUrl = "https://data.wprdc.org/api/3/action/datastore_search_sql?sql=SELECT%20%2A%20FROM%20%2270c06278-92c5-4040-ab28-17671866f81c%22%20WHERE%20%28address%20ILIKE%20%2710%20Edith%20Place%25%27%20OR%20address%20ILIKE%20%2712%20Edith%20Place%25%27%20OR%20address%20ILIKE%20%273210%20Dawson%20St%25%27%20OR%20address%20ILIKE%20%273220%20Dawson%20St%25%27%20OR%20address%20ILIKE%20%273227%20Dawson%20St%20Units%201%262%25%27%20OR%20address%20ILIKE%20%273228%20Dawson%20St%25%27%20OR%20address%20ILIKE%20%273230%20Dawson%20St%25%27%20OR%20address%20ILIKE%20%273232%20Dawson%20St%25%27%20OR%20address%20ILIKE%20%27109%20Oakland%20Ct%25%27%20OR%20address%20ILIKE%20%2725%20Edith%20Pl%25%27%20OR%20address%20ILIKE%20%273206%20Dawson%20St%20Units%201-3%25%27%20OR%20address%20ILIKE%20%273208%20Dawson%20St%20Units%201%262%25%27%20OR%20address%20ILIKE%20%273431%20Parkview%20Ave%25%27%20OR%20address%20ILIKE%20%273433%20Parkview%20Ave%20Units%201%262%25%27%20OR%20address%20ILIKE%20%275419%20Potter%20St%25%27%20OR%20address%20ILIKE%20%2719%20Edith%20Pl%25%27%20OR%20address%20ILIKE%20%2720%20Edith%20Pl%25%27%20OR%20address%20ILIKE%20%273341%20Parkview%20Ave%25%27%20OR%20address%20ILIKE%20%273343%20Parkview%20Ave%25%27%20OR%20address%20ILIKE%20%273707%20Orpwood%20St%25%27%20OR%20address%20ILIKE%20%273709%20Orpwood%20St%25%27%20OR%20address%20ILIKE%20%273711%20Orpwood%20St%20Units%201%262%25%27%20OR%20address%20ILIKE%20%273817%20Bates%20St%25%27%29%20AND%20investigation_date%20%3E%3D%20%272024-01-01%27%20ORDER%20BY%20investigation_date%20DESC";
+
+            const toTitleCase = (str) => {
+                if (typeof str !== 'string' || !str) return 'N/A';
+                return str.toLowerCase().split(' ').map(word => {
+                    if (!word) return '';
+                    return word.charAt(0).toUpperCase() + word.slice(1);
+                }).join(' ');
+            };
+
+            const toSentenceCase = (str) => {
+                if (typeof str !== 'string' || !str) return 'N/A';
+                str = str.trim();
+                if (str.length === 0) return 'N/A';
+                return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+            };
+
+            const getTomorrowSixAM = () => {
+                const now = new Date();
+                const tomorrow = new Date(now);
+                tomorrow.setDate(now.getDate() + 1);
+                tomorrow.setHours(6, 0, 0, 0);
+                return tomorrow.toISOString();
+            };
+
+            const processRecords = (records) => {
+                const grouped = {};
+                const statuses = new Set();
+
+                records.forEach(record => {
+                    const caseNumber = record.casefile_number;
+                    if (caseNumber) {
+                        if (!grouped[caseNumber]) {
+                            grouped[caseNumber] = [];
+                        }
+                        const transformedRecord = { ...record };
+
+                        transformedRecord.address = record.address ? toTitleCase(record.address) : 'N/A';
+                        transformedRecord.violation_description = record.violation_description ? toSentenceCase(record.violation_description) : 'N/A';
+                        transformedRecord.investigation_outcome = record.investigation_outcome ? toSentenceCase(record.investigation_outcome) : 'N/A';
+                        transformedRecord.violation_code_section = record.violation_code_section ? toSentenceCase(record.violation_code_section) : 'N/A';
+                        transformedRecord.investigation_findings = record.investigation_findings ? toSentenceCase(record.investigation_findings) : 'N/A';
+                        transformedRecord.violation_spec_instructions = record.violation_spec_instructions ? toSentenceCase(record.violation_spec_instructions) : null;
+
+                        grouped[caseNumber].push(transformedRecord);
+                    }
+                });
+
+                const processedGroupedData = {};
+                Object.keys(grouped).forEach(caseNum => {
+                    const caseRecords = grouped[caseNum];
+                    caseRecords.sort((a, b) => {
+                        const dateA = new Date(a.investigation_date);
+                        const dateB = new Date(b.investigation_date);
+                        return dateB - dateA;
+                    });
+
+                    const latestRecord = caseRecords[0];
+                    const fullAddress = latestRecord.address;
+                    const streetAddress = fullAddress.split(',')[0].trim();
+
+                    let finalStatus = latestRecord.status ? toSentenceCase(latestRecord.status) : 'N/A';
+
+                    const latestDate = latestRecord.investigation_date;
+                    if (latestDate) {
+                        const recordsOnLatestDate = caseRecords.filter(record =>
+                            record.investigation_date === latestDate
+                        );
+
+                        const hasClosedOnLatestDate = recordsOnLatestDate.some(record => toSentenceCase(record.status) === 'Closed');
+                        const hasReadyToCloseOnLatestDate = recordsOnLatestDate.some(record => toSentenceCase(record.status) === 'Ready to close');
+
+                        if (hasClosedOnLatestDate && hasReadyToCloseOnLatestDate) {
+                            finalStatus = 'Closed';
+                        }
+                    }
+
+                    statuses.add(finalStatus);
+
+                    processedGroupedData[caseNum] = {
+                        case_number: caseNum,
+                        street_address: streetAddress,
+                        latest_status: finalStatus,
+                        latest_outcome: latestRecord.investigation_outcome || 'N/A',
+                        latest_date: latestRecord.investigation_date ? new Date(latestRecord.investigation_date).toLocaleDateString() : 'N/A',
+                        latest_violation_description: latestRecord.violation_description || 'N/A',
+                        latest_investigation_outcome: latestRecord.investigation_outcome || 'N/A',
+                        latest_violation_code_section: latestRecord.violation_code_section || 'N/A',
+                        latest_investigation_findings: latestRecord.investigation_findings || 'N/A',
+                        latest_parcel_id: latestRecord.parcel_id || null,
+                        latest_violation_spec_instructions: latestRecord.violation_spec_instructions || null,
+                        all_records: caseRecords,
+                    };
+                });
+                console.log("Unique normalized statuses found in data:", Array.from(statuses));
+                return processedGroupedData;
+            };
+
+            const fetchApiCheckTimes = async () => {
+                setApiCheckTimeError(null);
+                try {
+                    const { data, error } = await supabase
+                        .from('app_settings')
+                        .select('last_api_check_time, next_violation_check_time')
+                        .order('last_api_check_time', { ascending: false })
+                        .limit(1);
+
+                    if (error) {
+                        console.error('Error fetching API check times from app_settings:', error.message);
+                        setApiCheckTimeError(`Failed to fetch API check times: ${error.message}. Please check your Supabase API key and permissions.`);
+                        setLastApiCheckTime(null);
+                        setNextApiCheckTime(null);
+                        return;
+                    }
+
+                    let dbLastCheck = null;
+                    let dbNextCheck = null;
+
+                    if (data && data.length > 0) {
+                        dbLastCheck = data[0].last_api_check_time;
+                        dbNextCheck = data[0].next_violation_check_time;
+                    }
+
+                    setLastApiCheckTime(dbLastCheck ? new Date(dbLastCheck).toLocaleString() : 'N/A (No syncs recorded)');
+                    setNextApiCheckTime(dbNextCheck ? new Date(dbNextCheck).toLocaleString() : 'N/A (Not scheduled)');
+
+                } catch (e) {
+                    console.error('Unhandled error fetching API check times:', e.message);
+                    setApiCheckTimeError(`An unexpected error occurred while fetching/updating API check times: ${e.message}`);
+                    setLastApiCheckTime(null);
+                    setNextApiCheckTime(null);
+                }
+            };
+
+            const loadDataFromSupabase = async () => {
+                setLoading(true);
+                setError(null);
+                setSyncStatus('Loading data from database...');
+                setNewViolationsCountDisplay(null);
+                try {
+                    if (!supabase) {
+                        throw new Error("Supabase client not initialized.");
+                    }
+                    const { data, error: dbError } = await supabase
+                        .from('violations')
+                        .select('*');
+
+                    if (dbError) {
+                        throw dbError;
+                    }
+
+                    if (data) {
+                        const processedData = processRecords(data);
+                        setGroupedViolations(processedData);
+                        setSyncStatus('Data loaded from database.');
+                    } else {
+                        setGroupedViolations({});
+                        setSyncStatus('No data found in database.');
+                    }
+                } catch (e) {
+                    console.error("Error loading from Supabase:", e.message);
+                    setError(`Failed to load data from database: ${e.message}`);
+                    setSyncStatus('Failed to load data from database.');
+                } finally {
+                    setLoading(false);
+                    fetchApiCheckTimes();
+                }
+            };
+
+            const handleSyncFromAPI = async () => {
+                setSyncStatus('Fetching new violations from API and syncing to database...');
+                setApiCheckTimeError(null);
+                setNewViolationsCountDisplay(null);
+                try {
+                    if (!supabase) {
+                        throw new Error("Supabase client not initialized.");
+                    }
+
+                    const { data: existingViolations, error: fetchExistingError } = await supabase
+                        .from('violations')
+                        .select('casefile_number');
+
+                    if (fetchExistingError) {
+                        throw fetchExistingError;
+                    }
+                    const existingCaseNumbers = new Set(existingViolations.map(v => v.casefile_number));
+
+                    const response = await fetch(wprdcApiUrl);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const apiData = await response.json();
+
+                    let newRecordsCount = 0;
+                    let hasInsertErrors = false;
+
+                    if (!apiData || !apiData.result || !apiData.result.records) {
+                        setSyncStatus('Sync complete. API returned no records to sync.');
+                    } else {
+                        const apiRecords = apiData.result.records;
+
+                        for (const record of apiRecords) {
+                            const caseNumber = record.casefile_number;
+                            const recordId = record._id;
+
+                            if (caseNumber && !existingCaseNumbers.has(caseNumber) && recordId !== null && recordId !== undefined) {
+                                const { error: insertError } = await supabase
+                                    .from('violations')
+                                    .insert([
+                                        {
+                                            _id: recordId,
+                                            casefile_number: record.casefile_number,
+                                            address: record.address,
+                                            parcel_id: record.parcel_id || null,
+                                            status: record.status || null,
+                                            investigation_date: record.investigation_date ? new Date(record.investigation_date).toISOString().split('T')[0] : null,
+                                            violation_description: record.violation_description || null,
+                                            violation_code_section: record.violation_code_section || null,
+                                            violation_spec_instructions: record.violation_spec_instructions || null,
+                                            investigation_outcome: record.investigation_outcome || null,
+                                            investigation_findings: record.investigation_findings || null,
+                                        },
+                                    ]);
+
+                                if (insertError) {
+                                    console.error(`Error inserting case ${caseNumber} (ID: ${recordId}):`, insertError.message);
+                                    hasInsertErrors = true;
+                                } else {
+                                    newRecordsCount++;
+                                }
+                            } else if (recordId === null || recordId === undefined) {
+                                console.warn(`Skipping record with case number ${caseNumber} due to missing or null _id.`);
+                            }
+                        }
+
+                        if (newRecordsCount > 0) {
+                            setSyncStatus(`Sync complete.`);
+                            setNewViolationsCountDisplay(`${newRecordsCount} new violations found.`);
+                        } else if (hasInsertErrors) {
+                            setSyncStatus('Sync completed with some errors. No new violations added. Check console for details.');
+                        } else {
+                            setSyncStatus('Sync complete. No new violations found.');
+                        }
+                    }
+
+                } catch (e) {
+                    console.error("API sync error:", e.message);
+                    setError(`Failed to sync from API: ${e.message}`);
+                    setSyncStatus(`API sync failed: ${e.message}`);
+                    setNewViolationsCountDisplay(null);
+                }
+            };
+
+            const getViolationExplanation = async (violationDescription, violationCodeSection, investigationFindings) => {
+                setLlmModalLoading(true);
+                setLlmModalError(null);
+                setLlmModalContent('');
+                setShowLLMModal(true);
+
+                try {
+                    const prompt = `Explain the following property violation details in simple, clear terms for a property owner. Focus on what the violation means and what might be the common implications.
+                    Violation Description: "${violationDescription}"
+                    Violation Code Section: "${violationCodeSection}"
+                    Investigation Findings: "${investigationFindings}"
+                    Provide a concise explanation, no more than 3-4 sentences.`;
+
+                    let chatHistory = [];
+                    chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                    const payload = { contents: chatHistory };
+                    const apiKey = "";
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`Gemini API error: ${errorData.error.message || response.statusText}`);
+                    }
+
+                    const result = await response.json();
+
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const text = result.candidates[0].content.parts[0].text;
+                        setLlmModalContent(text);
+                    } else {
+                        setLlmModalContent('No explanation could be generated.');
+                    }
+                } catch (e) {
+                    console.error('Error calling Gemini API:', e);
+                    setLlmModalError(`Failed to get explanation: ${e.message}`);
+                    setLlmModalContent('Could not generate explanation due to an error.');
+                } finally {
+                    setLlmModalLoading(false);
+                }
+            };
+
+            React.useEffect(() => {
+                loadDataFromSupabase();
+            }, []);
+
+            const filteredAndSortedViolations = React.useMemo(() => {
+                let currentViolations = Object.values(groupedViolations);
+
+                if (showOpenViolations) {
+                    currentViolations = currentViolations.filter(caseData =>
+                        caseData.latest_status !== 'Closed'
+                    );
+                } else {
+                    currentViolations = currentViolations.filter(caseData =>
+                        caseData.latest_status === 'Closed'
+                    );
+                }
+
+                currentViolations.sort((a, b) => {
+                    const dateA = new Date(a.latest_date);
+                    const dateB = new Date(b.latest_date);
+                    return dateB - dateA;
+                });
+
+                console.log("Filtered violations count:", currentViolations.length);
+                return currentViolations;
+            }, [groupedViolations, showOpenViolations]);
+
+            const ViolationCard = ({ caseData }) => {
+                const [isExpanded, setIsExpanded] = React.useState(false);
+
+                const getStatusColorClass = (status) => {
+                    switch (status) {
+                        case 'In court':
+                            return 'bg-red-500';
+                        case 'Ready to close':
+                            return 'bg-yellow-500';
+                        case 'Closed':
+                            return 'bg-black';
+                        default:
+                            return 'bg-green-500';
+                    }
+                };
+
+                const handleToggle = () => {
+                    setIsExpanded(!isExpanded);
+                };
+
+                const handleExplainClick = () => {
+                    getViolationExplanation(
+                        caseData.latest_violation_description,
+                        caseData.latest_violation_code_section,
+                        caseData.latest_investigation_findings
+                    );
+                };
+
+                return (
+                    <div className="bg-gray-700 rounded-3xl shadow-2xl p-6 border border-gray-600 transform transition-all duration-300 hover:scale-[1.01] flex flex-col">
+                        <div className="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 className="text-2xl md:text-3xl font-extrabold text-blue-300 mb-2 leading-tight">{caseData.street_address}</h3>
+                                <p className="text-lg text-gray-300 mb-3">Casefile: <span className="font-semibold text-white">{caseData.case_number}</span></p>
+                                <p className="text-base mb-1">
+                                    <span className="font-semibold text-gray-400">Status:</span>
+                                    <span className={`ml-2 inline-block px-3 py-1 rounded-full font-semibold text-sm ${getStatusColorClass(caseData.latest_status)} text-white`}>
+                                        {caseData.latest_status}
+                                    </span>
+                                </p>
+                                <p className="text-base mb-1">
+                                    <span className="font-semibold text-gray-400">Date:</span> <span className="text-white">{caseData.latest_date}</span>
+                                </p>
+                                <p className="text-base mt-3 mb-1">
+                                    <span className="font-semibold text-gray-400">Violation Description:</span> <span className="text-white">{caseData.latest_violation_description}</span>
+                                </p>
+                                <p className="text-base mb-1">
+                                    <span className="font-semibold text-gray-400">Investigation Outcome:</span> <span className="text-white">{caseData.latest_investigation_outcome}</span>
+                                </p>
+                                <p className="text-base mb-1">
+                                    <span className="font-semibold text-gray-400">Violation Code Section:</span> <span className="text-white">{caseData.latest_violation_code_section}</span>
+                                </p>
+                                <p className="text-base mb-1">
+                                    <span className="font-semibold text-gray-400">Investigation Findings:</span> <span className="text-white">{caseData.latest_investigation_findings}</span>
+                                </p>
+                                <button
+                                    onClick={handleExplainClick}
+                                    className="mt-4 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75"
+                                >
+                                    ✨ Explain Violation
+                                </button>
+                            </div>
+                            <button
+                                onClick={handleToggle}
+                                className="p-2 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-transform duration-300"
+                                aria-expanded={isExpanded}
+                                aria-label={isExpanded ? "Collapse details" : "Expand details"}
+                            >
+                                <svg
+                                    className={`w-6 h-6 transform ${isExpanded ? 'rotate-180' : 'rotate-0'}`}
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                            </button>
+                        </div>
+
+                        {isExpanded && (
+                            <div className="mt-4 pt-4 border-t border-gray-700">
+                                <h4 className="text-lg font-semibold text-purple-300 mb-3">All Records for this Case:</h4>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-700">
+                                        <thead className="bg-gray-700">
+                                            <tr>
+                                                <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                                    Date
+                                                </th>
+                                                <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                                    Violation Description
+                                                </th>
+                                                <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                                    Status
+                                                </th>
+                                                <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                                    Investigation Outcome
+                                                </th>
+                                                <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                                    Violation Code Section
+                                                </th>
+                                                <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                                    Investigation Findings
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-gray-800 divide-y divide-gray-700">
+                                            {caseData.all_records.map((record, idx) => (
+                                                <tr key={idx} className="hover:bg-gray-700 transition-colors duration-200">
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-white">
+                                                        {record.investigation_date ? new Date(record.investigation_date).toLocaleDateString() : 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-normal text-sm text-white">
+                                                        {record.violation_description || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-white">
+                                                        {record.status || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-normal text-sm text-white">
+                                                        {record.investigation_outcome || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-normal text-sm text-white">
+                                                        {record.violation_code_section || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-normal text-sm text-white">
+                                                        {record.investigation_findings || 'N/A'}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            const LLMModal = ({ show, onClose, content, loading, error }) => {
+                if (!show) return null;
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-content">
+                            <button onClick={onClose} className="modal-close-button">&times;</button>
+                            <h2 className="text-2xl font-bold text-blue-300 mb-4">Violation Explanation</h2>
+                            {loading ? (
+                                <p className="text-gray-400">Generating explanation...</p>
+                            ) : error ? (
+                                <p className="text-red-400">{error}</p>
+                            ) : (
+                                <p className="text-white whitespace-pre-wrap">{content}</p>
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white text-2xl">
+                        Loading violations data...
+                    </div>
+                );
+            }
+
+            if (error) {
+                return (
+                    <div className="min-h-screen bg-red-900 flex items-center justify-center text-white text-2xl p-4">
+                        Error: {error}
+                        <br />
+                        Please check your Supabase credentials or network connection.
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-neutral-950 to-black text-white p-6 md:p-10 font-sans">
+                    <h1 className="text-4xl md:text-5xl font-extrabold text-center mb-10 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
+                        JFW Oakland Violations Dashboard
+                    </h1>
+
+                    <div className="text-center text-sm mb-4 flex flex-col items-center justify-center">
+                        {syncStatus && (
+                            <div className="text-gray-400 mb-2">
+                                {syncStatus}
+                                <button
+                                    onClick={handleSyncFromAPI}
+                                    className="ml-4 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs py-1 px-3 rounded-md transition-colors duration-200 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                                    disabled={loading}
+                                >
+                                    Check For New Violations
+                                </button>
+                            </div>
+                        )}
+                        {lastApiCheckTime && (
+                            <div className="text-gray-400 mb-1">
+                                Last API check: {lastApiCheckTime}
+                            </div>
+                        )}
+                        {newViolationsCountDisplay && (
+                            <div className="text-green-400 font-semibold mb-1">
+                                {newViolationsCountDisplay}
+                            </div>
+                        )}
+                        {nextApiCheckTime && (
+                            <div className="text-gray-400 mb-1">
+                                Next API check: {nextApiCheckTime}
+                            </div>
+                        )}
+                        {apiCheckTimeError && (
+                            <div className="text-red-400 mb-4">
+                                {apiCheckTimeError}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row justify-start items-start gap-4 mb-8">
+                        <div className="flex space-x-3">
+                            <button
+                                onClick={() => setShowOpenViolations(true)}
+                                className={`font-bold py-2 px-6 rounded-lg shadow-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-opacity-75
+                                    ${showOpenViolations
+                                        ? 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500'
+                                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300 focus:ring-gray-500'
+                                    }`}
+                            >
+                                Open Violations
+                            </button>
+                            <button
+                                onClick={() => setShowOpenViolations(false)}
+                                className={`font-bold py-2 px-6 rounded-lg shadow-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-opacity-75
+                                    ${!showOpenViolations
+                                        ? 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500'
+                                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300 focus:ring-gray-500'
+                                    }`}
+                            >
+                                Closed Violations
+                            </button>
+                        </div>
+                    </div>
+
+                    {filteredAndSortedViolations.length === 0 && Object.keys(groupedViolations).length > 0 ? (
+                        <div className="text-center text-xl text-gray-400">
+                            No violations found for the selected status.
+                        </div>
+                    ) : Object.keys(groupedViolations).length === 0 ? (
+                        <div className="text-center text-xl text-gray-400">
+                            No violation data found for the specified addresses.
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-8">
+                            {filteredAndSortedViolations.map((caseData) => (
+                                <ViolationCard key={caseData.case_number} caseData={caseData} />
+                            ))}
+                        </div>
+                    )}
+
+                    <LLMModal
+                        show={showLLMModal}
+                        onClose={() => setShowLLMModal(false)}
+                        content={llmModalContent}
+                        loading={llmModalLoading}
+                        error={llmModalError}
+                    />
+                </div>
+            );
+        };
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
