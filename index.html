@@ -318,6 +318,32 @@
 
                 // Removed handleExplainClick function
 
+                // Sort all_records by investigation_date descending, then by status (Closed first)
+                const sortedAllRecords = React.useMemo(() => {
+                    return [...caseData.all_records].sort((a, b) => {
+                        const dateA = new Date(a.investigation_date);
+                        const dateB = new Date(b.investigation_date);
+
+                        // Primary sort: date descending
+                        if (dateB.getTime() !== dateA.getTime()) {
+                            return dateB.getTime() - dateA.getTime();
+                        }
+
+                        // Secondary sort: if dates are the same, 'Closed' status comes first
+                        const statusA = toSentenceCase(a.status);
+                        const statusB = toSentenceCase(b.status);
+
+                        if (statusA === 'Closed' && statusB !== 'Closed') {
+                            return -1; // A (Closed) comes before B (not Closed)
+                        }
+                        if (statusA !== 'Closed' && statusB === 'Closed') {
+                            return 1; // B (Closed) comes before A (not Closed)
+                        }
+                        // If both are Closed, or both are not Closed, maintain original relative order or use another tie-breaker if needed
+                        return 0; // No change in order if statuses are the same or neither is 'Closed'
+                    });
+                }, [caseData.all_records]);
+
                 return (
                     <div className="bg-gray-700 rounded-3xl shadow-2xl p-6 border border-gray-600 transform transition-all duration-300 hover:scale-[1.01] flex flex-col">
                         <div className="flex justify-between items-start mb-4">
@@ -391,10 +417,13 @@
                                                 <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                                                     Investigation Findings
                                                 </th>
+                                                <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                                    ID
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="bg-gray-800 divide-y divide-gray-700">
-                                            {caseData.all_records.map((record, idx) => (
+                                            {sortedAllRecords.map((record, idx) => ( // Use sortedAllRecords here
                                                 <tr key={idx} className="hover:bg-gray-700 transition-colors duration-200">
                                                     <td className="px-4 py-2 whitespace-nowrap text-sm text-white">
                                                         {record.investigation_date ? new Date(record.investigation_date).toLocaleDateString() : 'N/A'}
@@ -413,6 +442,9 @@
                                                     </td>
                                                     <td className="px-4 py-2 whitespace-normal text-sm text-white">
                                                         {record.investigation_findings || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-white">
+                                                        {record._id || 'N/A'}
                                                     </td>
                                                 </tr>
                                             ))}
