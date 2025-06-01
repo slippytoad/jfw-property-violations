@@ -280,13 +280,24 @@
                 const processedGroupedData = {};
                 Object.keys(grouped).forEach(caseNum => {
                     const caseRecords = grouped[caseNum];
+
+                    // Sort records by investigation_date in descending order for latest_date
                     caseRecords.sort((a, b) => {
                         const dateA = new Date(a.investigation_date);
                         const dateB = new Date(b.investigation_date);
-                        return dateB - dateA;
+                        return dateB - dateA; // Latest date first
                     });
-
                     const latestRecord = caseRecords[0];
+
+                    // Sort records by investigation_date in ascending order for opened_date
+                    const sortedForOpenedDate = [...caseRecords].sort((a, b) => {
+                        const dateA = new Date(a.investigation_date);
+                        const dateB = new Date(b.investigation_date);
+                        return dateA - dateB; // Earliest date first
+                    });
+                    const earliestRecord = sortedForOpenedDate[0];
+
+
                     const fullAddress = latestRecord.address;
                     const streetAddress = fullAddress.split(',')[0].trim();
 
@@ -314,6 +325,7 @@
                         latest_status: finalStatus,
                         latest_outcome: latestRecord.investigation_outcome || 'N/A',
                         latest_date: latestRecord.investigation_date ? new Date(latestRecord.investigation_date).toLocaleDateString() : 'N/A',
+                        opened_date: earliestRecord.investigation_date ? new Date(earliestRecord.investigation_date).toLocaleDateString() : 'N/A', // Added opened_date
                         latest_violation_description: latestRecord.violation_description || 'N/A',
                         latest_investigation_outcome: latestRecord.investigation_outcome || 'N/A',
                         latest_violation_code_section: latestRecord.violation_code_section || 'N/A',
@@ -376,7 +388,6 @@
 
                 // Determine labels based on status
                 const isClosed = caseData.latest_status === 'Closed';
-                const statusLabel = isClosed ? 'Status' : 'Latest Status';
                 const dateLabel = isClosed ? 'Date' : 'Last update';
 
                 // Sort all_records by investigation_date descending, then by status (Closed first)
@@ -408,14 +419,16 @@
                 return (
                     <div className="bg-gray-700 rounded-3xl shadow-2xl p-6 border border-gray-600 transform transition-all duration-300 hover:scale-[1.01] flex flex-col">
                         <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 className="text-2xl md:text-3xl font-extrabold text-blue-300 mb-2 leading-tight">{caseData.street_address}</h3>
-                                <p className="text-lg text-gray-300 mb-3">Casefile: <span className="font-semibold text-white">{caseData.case_number}</span></p>
-                                <p className="text-base mb-1">
-                                    <span className="font-semibold text-gray-400">{statusLabel}:</span>
-                                    <span className={`ml-2 inline-block px-3 py-1 rounded-full font-semibold text-sm ${getStatusColorClass(caseData.latest_status)} text-white`}>
+                            <div className="flex flex-col">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <h3 className="text-2xl md:text-3xl font-extrabold text-blue-300 leading-tight">{caseData.street_address}</h3>
+                                    <span className={`inline-block px-3 py-1 rounded-full font-semibold text-sm ${getStatusColorClass(caseData.latest_status)} text-white`}>
                                         {caseData.latest_status}
                                     </span>
+                                </div>
+                                <p className="text-lg text-gray-300 mb-3">Casefile: <span className="font-semibold text-white">{caseData.case_number}</span></p>
+                                <p className="text-base mb-1">
+                                    <span className="font-semibold text-gray-400">Opened:</span> <span className="text-white">{caseData.opened_date}</span>
                                 </p>
                                 <p className="text-base mb-1">
                                     <span className="font-semibold text-gray-400">{dateLabel}:</span> <span className="text-white">{caseData.latest_date}</span>
